@@ -14,9 +14,16 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlencode, urljoin, urlparse
 from urllib.request import Request, urlopen
 
-DEFAULT_BASE_URL = "https://z.modbapi.com"
+DEFAULT_BASE_URL = "https://api.modbapi.com"
 DEFAULT_MODEL = "gpt-image-2.5"
 MAX_IMAGE_BYTES = 50 * 1024 * 1024
+SIZE_PRESETS = {
+    "1:1": "1024x1024",
+    "16:9": "1024x576",
+    "9:16": "576x1024",
+    "4:3": "1024x768",
+    "3:4": "768x1024",
+}
 IMAGE_EXTENSIONS = {
     "image/gif": ".gif",
     "image/jpeg": ".jpg",
@@ -92,6 +99,19 @@ def first_image_url(payload: dict[str, Any]) -> str | None:
     return None
 
 
+def normalize_size(value: str) -> str:
+    normalized = value.strip().lower().replace("×", "x").replace(" ", "")
+    if normalized in SIZE_PRESETS:
+        return SIZE_PRESETS[normalized]
+    match = re.fullmatch(r"([1-9]\d*)x([1-9]\d*)", normalized)
+    if match:
+        return normalized
+    aliases = ", ".join(SIZE_PRESETS)
+    raise argparse.ArgumentTypeError(
+        f"invalid size {value!r}; use one of {aliases}, or an API-supported WIDTHxHEIGHT value"
+    )
+
+
 def default_output_dir() -> str:
     codex_home = os.getenv("CODEX_HOME", os.path.expanduser("~/.codex"))
     return os.path.join(codex_home, "generated_images", "modbapi")
@@ -126,11 +146,11 @@ def download_image(image_url: str, task_id: str, output: str | None = None) -> s
             except ValueError:
                 pass
 
+        extension = IMAGE_EXTENSIONS.get(content_type, os.path.splitext(parsed.path)[1] or ".img")
         if output:
             destination = os.path.abspath(os.path.expanduser(output))
         else:
             safe_task_id = re.sub(r"[^A-Za-z0-9._-]", "_", task_id)
-            extension = IMAGE_EXTENSIONS.get(content_type, os.path.splitext(parsed.path)[1] or ".img")
             destination = os.path.join(default_output_dir(), f"{safe_task_id}{extension}")
 
         parent = os.path.dirname(destination) or os.curdir
@@ -138,7 +158,7 @@ def download_image(image_url: str, task_id: str, output: str | None = None) -> s
         temp_path = ""
         total = 0
         try:
-            with tempfile.NamedTemporaryFile(prefix=".modbapi-", suffix=".part", dir=parent, delete=False) as stream:
+            with tempfile.NamedTemporaryFile(prefix=".modbapi-", suffix=extension, dir=parent, delete=False) as stream:
                 temp_path = stream.name
                 while True:
                     chunk = response.read(64 * 1024)
@@ -186,7 +206,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--model", default=DEFAULT_MODEL)
     parser.add_argument("--base-url", default=os.getenv("MODBAPI_BASE_URL", DEFAULT_BASE_URL))
     parser.add_argument("--api-key", default=os.getenv("MODBAPI_API_KEY") or load_local_key(), help=argparse.SUPPRESS)
-    parser.add_argument("--size", default="1024x1024")
+    parser.add_argument(
+        "--size",
+        type=normalize_size,
+        default=SIZE_PRESETS["1:1"],
+        help="Preset ratio (1:1, 16:9, 9:16, 4:3, 3:4) or API-supported WIDTHxHEIGHT",
+    )
     parser.add_argument("--quality", default=None)
     parser.add_argument("--response-format", choices=("url", "b64_json"), default="url")
     parser.add_argument("--output", help="Local image file; defaults to $CODEX_HOME/generated_images/modbapi/")

@@ -1,6 +1,6 @@
 # modbapi-imagegen
 
-让 Codex 通过 [modbapi](https://modbapi.com) 的异步图片任务接口生成或编辑图片，并把完成后的图片 URL 直接显示在 Codex 对话中。
+让 Codex 通过 [modbapi](https://modbapi.com) 的异步图片任务接口生成或编辑图片，将完成结果保存到本地并显示在 Codex 对话中。
 
 > 这是一个可公开发布的 Codex Skill。它不会把 API Key 写入仓库、技能文件或命令历史。
 
@@ -58,7 +58,7 @@ export MODBAPI_API_KEY='你的 modbapi API Key'
 | 环境变量 | 必填 | 默认值 | 说明 |
 |---|---:|---|---|
 | `MODBAPI_API_KEY` | 是 | — | modbapi API Key |
-| `MODBAPI_BASE_URL` | 否 | `https://z.modbapi.com` | API 根地址，不要重复添加 `/v1` |
+| `MODBAPI_BASE_URL` | 否 | `https://api.modbapi.com` | API 根地址，不要重复添加 `/v1` |
 
 图片默认保存到 `$CODEX_HOME/generated_images/modbapi/`（未设置 `CODEX_HOME` 时使用 `~/.codex/generated_images/modbapi/`）。可用 `--output` 指定项目内路径；只有明确需要旧的远程 URL 展示方式时才使用 `--url-only`。
 
@@ -72,7 +72,7 @@ export MODBAPI_API_KEY='你的 modbapi API Key'
 python3 scripts/modbapi_imagegen.py \
   --prompt "一只猫坐在赛博朋克风格的窗边" \
   --model "gpt-image-2.5" \
-  --size "1024x1024" \
+  --size "1:1" \
   --quality "high"
 ```
 
@@ -92,8 +92,8 @@ python3 scripts/modbapi_imagegen.py \
 ```text
 --prompt              必填，生图或编辑提示词
 --model               模型，默认 gpt-image-2.5
---base-url            API 根地址，默认 https://z.modbapi.com
---size                默认 1024x1024
+--base-url            API 根地址，默认 https://api.modbapi.com
+--size                支持 1:1、16:9、9:16、4:3、3:4 别名，或接口支持的精确尺寸
 --quality             可选，例如 high
 --response-format     url 或 b64_json，默认 url
 --output              本地图片文件路径；默认保存到 Codex generated_images 目录
@@ -103,6 +103,20 @@ python3 scripts/modbapi_imagegen.py \
 --interval            轮询间隔秒数，默认 3
 --timeout             最大等待秒数，默认 300
 ```
+
+### 尺寸预设
+
+| 比例参数 | 实际请求尺寸 |
+|---|---|
+| `1:1` | `1024x1024` |
+| `16:9` | `1024x576` |
+| `9:16` | `576x1024` |
+| `4:3` | `1024x768` |
+| `3:4` | `768x1024` |
+
+也可以直接传接口支持的精确尺寸，例如 `1672x940`；脚本只校验 `WIDTHxHEIGHT` 格式并原样发送。部分上游模型会返回与请求值不同的原生尺寸，脚本保留接口返回文件，不做本地缩放。
+
+长提示词、多视图角色设定图和一致性要求请参考 [提示词优化](references/prompting.md)。重点是先选定一个画幅，消除“或”式冲突，并把重复的身份、服装和身体比例约束合并为一次清晰的 identity lock。
 
 ## API Key 安全说明
 
@@ -132,7 +146,7 @@ python3 scripts/modbapi_imagegen.py \
 
 ### `401` 或 `404`
 
-检查 API Key、`MODBAPI_BASE_URL` 和 `/v1` 层级。默认值应为 `https://z.modbapi.com`，脚本会自动拼接 `/v1`。
+检查 API Key、`MODBAPI_BASE_URL` 和 `/v1` 层级。默认值应为 `https://api.modbapi.com`，脚本会自动拼接 `/v1`。
 
 ## 开发与验证
 

@@ -1,3 +1,5 @@
+import argparse
+import importlib.util
 import json
 import os
 import subprocess
@@ -10,6 +12,9 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
 SCRIPT = os.path.join(os.path.dirname(__file__), "..", "scripts", "modbapi_imagegen.py")
+SPEC = importlib.util.spec_from_file_location("modbapi_imagegen", SCRIPT)
+MODULE = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(MODULE)
 
 class Handler(BaseHTTPRequestHandler):
     polls = 0
@@ -56,7 +61,7 @@ class ModbapiImagegenTests(unittest.TestCase):
                 result = subprocess.run([
                     sys.executable, SCRIPT, "--prompt", "test image",
                     "--base-url", f"http://127.0.0.1:{server.server_port}",
-                    "--interval", "0.01", "--output", output,
+                    "--interval", "0.01", "--output", output, "--size", "16:9",
                 ], capture_output=True, text=True, env=env, check=False)
             finally:
                 server.shutdown()
@@ -65,6 +70,7 @@ class ModbapiImagegenTests(unittest.TestCase):
             self.assertEqual(Path(output).read_bytes(), Handler.image)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(Handler.received["response_format"], "url")
+        self.assertEqual(Handler.received["size"], "1024x576")
         self.assertIn(f"IMAGE_URL={Handler.result_url}", result.stdout)
         self.assertIn(f"IMAGE_PATH={output}", result.stdout)
         self.assertIn(f"![Generated image]({output})", result.stdout)
@@ -97,6 +103,26 @@ class ModbapiImagegenTests(unittest.TestCase):
         result = subprocess.run([sys.executable, SCRIPT, "--prompt", "test"], capture_output=True, text=True, env=env, check=False)
         self.assertEqual(result.returncode, 2)
         self.assertIn("MODBAPI_API_KEY is not set", result.stderr)
+
+    def test_size_presets_and_api_supported_exact_sizes(self):
+        expected = {
+            "1:1": "1024x1024",
+            "16:9": "1024x576",
+            "9:16": "576x1024",
+            "4:3": "1024x768",
+            "3:4": "768x1024",
+        }
+        for ratio, size in expected.items():
+            with self.subTest(ratio=ratio):
+                self.assertEqual(MODULE.normalize_size(ratio), size)
+                self.assertEqual(MODULE.normalize_size(size), size)
+        self.assertEqual(MODULE.normalize_size("1672x940"), "1672x940")
+        self.assertEqual(MODULE.normalize_size("2048x1024"), "2048x1024")
+
+    def test_malformed_size_is_rejected(self):
+        for size in ("0x1024", "1024x0", "wide", "16:10"):
+            with self.subTest(size=size), self.assertRaises(argparse.ArgumentTypeError):
+                MODULE.normalize_size(size)
 
 if __name__ == "__main__":
     unittest.main()
