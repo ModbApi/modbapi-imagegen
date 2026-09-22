@@ -22,7 +22,7 @@
 把下面这句话发送给支持 Codex Skill 安装的 ChatGPT / Codex 客户端（也可直接参考仓库中的 [INSTALL.md](INSTALL.md)）：
 
 ```text
-安装 GitHub 仓库 https://github.com/你的用户名/modbapi-imagegen 中的 Codex Skill，并在安装完成后提示我输入 MODBAPI_API_KEY；将 API Key 安全保存为本机环境变量，不要写入仓库、日志、聊天记录或 SKILL.md，然后用该 Skill 生成一张测试图片。
+安装 GitHub 仓库 git@github-mb:ModbApi/modbapi-imagegen.git 中的 Codex Skill，并在安装完成后提示我输入 MODBAPI_API_KEY；将 API Key 安全保存为本机环境变量，不要写入仓库、日志、聊天记录或 SKILL.md，然后用该 Skill 生成一张测试图片。
 ```
 
 客户端应当在安装后单独提示：
@@ -37,7 +37,7 @@ API Key 只保存在本机的 Codex 运行环境中。安装器默认写入 `$CO
 
 ```sh
 mkdir -p "$HOME/.codex/skills"
-git clone https://github.com/你的用户名/modbapi-imagegen.git \
+git clone git@github-mb:ModbApi/modbapi-imagegen.git \
   "$HOME/.codex/skills/modbapi-imagegen"
 ```
 
