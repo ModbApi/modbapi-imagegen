@@ -13,7 +13,11 @@ Use the included `scripts/modbapi_imagegen.py` helper. It implements the async A
 
 ## Configuration
 
-Read the API key from `MODBAPI_API_KEY` unless the user supplied a key explicitly. The default base URL is `https://api.modbapi.com`; override it with `MODBAPI_BASE_URL` or `--base-url`. Do not print the API key. Use `response_format=url` so the completed task contains a displayable `detail.data[].download_url`.
+Read the API key from `MODBAPI_API_KEY` unless the user supplied a key explicitly. If that variable is absent, the helper reads `$CODEX_HOME/secrets/modbapi-imagegen.env`, created by `scripts/install.sh`. The default base URL is `https://api.modbapi.com`; override it with `MODBAPI_BASE_URL` or `--base-url`. Do not print the API key. Use `response_format=url` so the completed task contains a displayable `detail.data[].download_url`.
+
+## Installation and key setup
+
+For a fresh checkout, run `scripts/install.sh` in an interactive terminal. It requests the API Key with hidden input and stores it at `$CODEX_HOME/secrets/modbapi-imagegen.env` with mode 600. A ChatGPT/Codex client may use the prompt in `INSTALL.md` to perform this checkout and request; never put the key in a chat message or repository file.
 
 ## Workflow
 
