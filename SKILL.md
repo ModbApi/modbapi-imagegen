@@ -30,7 +30,7 @@ For a fresh checkout, run `scripts/install.sh` in an interactive terminal. It re
      --quality "high" --response-format url
    ```
 
-   The model defaults to `gpt-image-2`; use the user's model when specified.
+   The model defaults to `gpt-image-2.5`; use the user's model when specified.
 3. For an edit, add `--edit --image-url URL` once per source image. Keep edit invariants in the prompt (for example, “change only the background; keep the subject unchanged”).
 4. The helper saves the returned task id, polls `queued`/`in_progress` every 3 seconds, and stops on `completed` or `failed`. Use `--timeout` for a different maximum wait (default 300 seconds).
 5. On success, copy the helper's `IMAGE_URL` into a Markdown image so the Codex client displays it inline:

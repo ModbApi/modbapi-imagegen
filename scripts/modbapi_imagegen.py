@@ -13,7 +13,7 @@ from urllib.parse import quote, urlencode, urljoin
 from urllib.request import Request, urlopen
 
 DEFAULT_BASE_URL = "https://z.modbapi.com"
-DEFAULT_MODEL = "gpt-image-2"
+DEFAULT_MODEL = "gpt-image-2.5"
 
 
 def load_local_key() -> str | None:

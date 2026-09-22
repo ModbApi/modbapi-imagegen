@@ -69,7 +69,7 @@ export MODBAPI_API_KEY='你的 modbapi API Key'
 ```sh
 python3 scripts/modbapi_imagegen.py \
   --prompt "一只猫坐在赛博朋克风格的窗边" \
-  --model "gpt-image-2" \
+  --model "gpt-image-2.5" \
   --size "1024x1024" \
   --quality "high"
 ```
