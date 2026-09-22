@@ -2,15 +2,21 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 import threading
 import unittest
+from base64 import b64decode
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from pathlib import Path
 
 SCRIPT = os.path.join(os.path.dirname(__file__), "..", "scripts", "modbapi_imagegen.py")
 
 class Handler(BaseHTTPRequestHandler):
     polls = 0
     received = None
+    result_url = None
+    image_user_agent = None
+    image = b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M/wHwAF/gL+AvzEGwAAAABJRU5ErkJggg==")
     def log_message(self, *_):
         pass
     def _send(self, payload, code=200):
@@ -25,12 +31,49 @@ class Handler(BaseHTTPRequestHandler):
         Handler.received = json.loads(self.rfile.read(length))
         self._send({"id": "task_test", "task_id": "task_test", "status": "queued"}, 202)
     def do_GET(self):
+        if self.path == "/result.png":
+            Handler.image_user_agent = self.headers.get("User-Agent")
+            self.send_response(200)
+            self.send_header("Content-Type", "image/png")
+            self.send_header("Content-Length", str(len(Handler.image)))
+            self.end_headers()
+            self.wfile.write(Handler.image)
+            return
         Handler.polls += 1
-        self._send({"id": "task_test", "status": "completed", "detail": {"data": [{"download_url": "https://cdn.example.test/result.png"}]}})
+        self._send({"id": "task_test", "status": "completed", "detail": {"data": [{"download_url": Handler.result_url}]}})
 
 class ModbapiImagegenTests(unittest.TestCase):
     def test_async_generation_prints_renderable_image(self):
         server = HTTPServer(("127.0.0.1", 0), Handler)
+        Handler.polls = 0
+        Handler.result_url = f"http://127.0.0.1:{server.server_port}/result.png"
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        with tempfile.TemporaryDirectory() as directory:
+            output = os.path.join(directory, "result.png")
+            try:
+                env = dict(os.environ, MODBAPI_API_KEY="test-key")
+                result = subprocess.run([
+                    sys.executable, SCRIPT, "--prompt", "test image",
+                    "--base-url", f"http://127.0.0.1:{server.server_port}",
+                    "--interval", "0.01", "--output", output,
+                ], capture_output=True, text=True, env=env, check=False)
+            finally:
+                server.shutdown()
+                server.server_close()
+                thread.join(timeout=2)
+            self.assertEqual(Path(output).read_bytes(), Handler.image)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(Handler.received["response_format"], "url")
+        self.assertIn(f"IMAGE_URL={Handler.result_url}", result.stdout)
+        self.assertIn(f"IMAGE_PATH={output}", result.stdout)
+        self.assertIn(f"![Generated image]({output})", result.stdout)
+        self.assertEqual(Handler.image_user_agent, "modbapi-imagegen/1.0")
+        self.assertGreaterEqual(Handler.polls, 1)
+
+    def test_url_only_preserves_remote_rendering(self):
+        server = HTTPServer(("127.0.0.1", 0), Handler)
+        Handler.result_url = "https://cdn.example.test/result.png"
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
         try:
@@ -38,19 +81,18 @@ class ModbapiImagegenTests(unittest.TestCase):
             result = subprocess.run([
                 sys.executable, SCRIPT, "--prompt", "test image",
                 "--base-url", f"http://127.0.0.1:{server.server_port}",
-                "--interval", "0.01",
+                "--interval", "0.01", "--url-only",
             ], capture_output=True, text=True, env=env, check=False)
         finally:
             server.shutdown()
+            server.server_close()
             thread.join(timeout=2)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(Handler.received["response_format"], "url")
-        self.assertIn("IMAGE_URL=https://cdn.example.test/result.png", result.stdout)
+        self.assertNotIn("IMAGE_PATH=", result.stdout)
         self.assertIn("![Generated image](https://cdn.example.test/result.png)", result.stdout)
-        self.assertGreaterEqual(Handler.polls, 1)
 
     def test_missing_key_is_actionable(self):
-        env = dict(os.environ)
+        env = dict(os.environ, MODBAPI_API_KEY_FILE="/path/that/does/not/exist")
         env.pop("MODBAPI_API_KEY", None)
         result = subprocess.run([sys.executable, SCRIPT, "--prompt", "test"], capture_output=True, text=True, env=env, check=False)
         self.assertEqual(result.returncode, 2)

@@ -1,6 +1,6 @@
 ---
 name: modbapi-imagegen
-description: Generate or edit images from Codex through the modbapi asynchronous image-task API, poll until completion, and render the returned image URL in the Codex client. Use when the user asks Codex to create or edit an image through modbapi; do not use for ordinary text-only requests.
+description: Generate or edit images from Codex through the modbapi asynchronous image-task API, poll until completion, save the result locally, and render it in the Codex client. Use when the user asks Codex to create or edit an image through modbapi; do not use for ordinary text-only requests.
 ---
 
 # modbapi image generation for Codex
@@ -33,11 +33,11 @@ For a fresh checkout, run `scripts/install.sh` in an interactive terminal. It re
    The model defaults to `gpt-image-2.5`; use the user's model when specified.
 3. For an edit, add `--edit --image-url URL` once per source image. Keep edit invariants in the prompt (for example, “change only the background; keep the subject unchanged”).
 4. The helper saves the returned task id, polls `queued`/`in_progress` every 3 seconds, and stops on `completed` or `failed`. Use `--timeout` for a different maximum wait (default 300 seconds).
-5. On success, copy the helper's `IMAGE_URL` into a Markdown image so the Codex client displays it inline:
+5. On success, the helper downloads the completed image to `$CODEX_HOME/generated_images/modbapi/` and prints `IMAGE_PATH` plus ready-to-use Markdown. Copy that exact Markdown into the final response so the Codex client displays the local file inline:
 
-   `![<short description>](<IMAGE_URL>)`
+   `![<short description>](<absolute IMAGE_PATH>)`
 
-   Also report the task id and status. Do not expose the API key. If the task fails, show the returned error message and stop polling; do not resubmit automatically.
+   Do not substitute `IMAGE_URL` in the Markdown; some CDN domains are not rendered by the client. Use `--output <path>` when the image belongs in the current project. `--url-only` preserves the old remote-URL behavior when explicitly needed. Also report the task id, status, and saved path. Do not expose the API key. If the task fails, show the returned error message and stop polling; do not resubmit automatically.
 
 ## API details
 
@@ -46,4 +46,5 @@ For a fresh checkout, run `scripts/install.sh` in an interactive terminal. It re
 - Edit body additionally contains `images: [{"image_url":"..."}]`.
 - A successful create response is `202 Accepted` with `task_id`; creation does not mean the image is ready.
 - Only read image URLs after `status=completed` and `detail=true`. The documented result is `detail.data[].download_url`.
+- Treat the remote URL as the source for the local result, not as the default display target. The helper validates an image content type, enforces a 50 MiB limit, and atomically writes the local file.
 - Treat `queued` and `in_progress` as transient. Treat `failed` and `cancelled` as terminal.

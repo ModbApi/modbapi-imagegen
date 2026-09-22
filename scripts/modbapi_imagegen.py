@@ -5,15 +5,24 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
+import tempfile
 import time
 from typing import Any
 from urllib.error import HTTPError, URLError
-from urllib.parse import quote, urlencode, urljoin
+from urllib.parse import quote, urlencode, urljoin, urlparse
 from urllib.request import Request, urlopen
 
 DEFAULT_BASE_URL = "https://z.modbapi.com"
 DEFAULT_MODEL = "gpt-image-2.5"
+MAX_IMAGE_BYTES = 50 * 1024 * 1024
+IMAGE_EXTENSIONS = {
+    "image/gif": ".gif",
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+    "image/webp": ".webp",
+}
 
 
 def load_local_key() -> str | None:
@@ -83,6 +92,94 @@ def first_image_url(payload: dict[str, Any]) -> str | None:
     return None
 
 
+def default_output_dir() -> str:
+    codex_home = os.getenv("CODEX_HOME", os.path.expanduser("~/.codex"))
+    return os.path.join(codex_home, "generated_images", "modbapi")
+
+
+def download_image(image_url: str, task_id: str, output: str | None = None) -> str:
+    """Save a completed image locally so Codex can render it reliably."""
+    parsed = urlparse(image_url)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        raise RuntimeError("completed task returned an invalid image URL")
+
+    request = Request(
+        image_url,
+        headers={"Accept": "image/*", "User-Agent": "modbapi-imagegen/1.0"},
+        method="GET",
+    )
+    try:
+        response = urlopen(request, timeout=60)
+    except (HTTPError, URLError) as exc:
+        reason = getattr(exc, "reason", exc)
+        raise RuntimeError(f"could not fetch completed image: {reason}") from exc
+
+    with response:
+        content_type = response.headers.get_content_type().lower()
+        if not content_type.startswith("image/"):
+            raise RuntimeError(f"completed image URL returned {content_type or 'unknown content type'}")
+        content_length = response.headers.get("Content-Length")
+        if content_length:
+            try:
+                if int(content_length) > MAX_IMAGE_BYTES:
+                    raise RuntimeError("completed image exceeds the 50 MiB download limit")
+            except ValueError:
+                pass
+
+        if output:
+            destination = os.path.abspath(os.path.expanduser(output))
+        else:
+            safe_task_id = re.sub(r"[^A-Za-z0-9._-]", "_", task_id)
+            extension = IMAGE_EXTENSIONS.get(content_type, os.path.splitext(parsed.path)[1] or ".img")
+            destination = os.path.join(default_output_dir(), f"{safe_task_id}{extension}")
+
+        parent = os.path.dirname(destination) or os.curdir
+        os.makedirs(parent, exist_ok=True)
+        temp_path = ""
+        total = 0
+        try:
+            with tempfile.NamedTemporaryFile(prefix=".modbapi-", suffix=".part", dir=parent, delete=False) as stream:
+                temp_path = stream.name
+                while True:
+                    chunk = response.read(64 * 1024)
+                    if not chunk:
+                        break
+                    total += len(chunk)
+                    if total > MAX_IMAGE_BYTES:
+                        raise RuntimeError("completed image exceeds the 50 MiB download limit")
+                    stream.write(chunk)
+            if total == 0:
+                raise RuntimeError("completed image URL returned an empty response")
+            os.replace(temp_path, destination)
+        except Exception:
+            if temp_path:
+                try:
+                    os.unlink(temp_path)
+                except FileNotFoundError:
+                    pass
+            raise
+    return destination
+
+
+def emit_result(task_id: str, status: str, image_url: str, output: str | None, url_only: bool) -> int:
+    result = {"task_id": task_id, "status": status, "image_url": image_url}
+    if not url_only:
+        try:
+            image_path = download_image(image_url, task_id, output)
+        except RuntimeError as exc:
+            print(f"ERROR: task {task_id} completed but {exc}", file=sys.stderr)
+            return 1
+        result["image_path"] = image_path
+    print(json.dumps(result, ensure_ascii=False))
+    print(f"IMAGE_URL={image_url}")
+    if url_only:
+        print(f"![Generated image]({image_url})")
+    else:
+        print(f"IMAGE_PATH={result['image_path']}")
+        print(f"![Generated image]({result['image_path']})")
+    return 0
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Call modbapi async image tasks and print a Markdown image.")
     parser.add_argument("--prompt", required=True, help="Image generation or editing prompt")
@@ -92,6 +189,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--size", default="1024x1024")
     parser.add_argument("--quality", default=None)
     parser.add_argument("--response-format", choices=("url", "b64_json"), default="url")
+    parser.add_argument("--output", help="Local image file; defaults to $CODEX_HOME/generated_images/modbapi/")
+    parser.add_argument("--url-only", action="store_true", help="Do not save the image locally; render the remote URL")
     parser.add_argument("--edit", action="store_true", help="Use the image edit task endpoint")
     parser.add_argument("--image-url", action="append", default=[], help="Source image URL; repeat for multiple images")
     parser.add_argument("--interval", type=float, default=3.0)
@@ -134,10 +233,7 @@ def main() -> int:
     if not isinstance(task_id, str) or not task_id:
         direct_url = first_image_url(created)
         if direct_url:
-            print(json.dumps({"status": "completed", "image_url": direct_url}, ensure_ascii=False))
-            print(f"IMAGE_URL={direct_url}")
-            print(f"![Generated image]({direct_url})")
-            return 0
+            return emit_result(f"direct-{int(time.time())}", "completed", direct_url, args.output, args.url_only)
         print("ERROR: create response did not include task_id", file=sys.stderr)
         return 1
 
@@ -160,11 +256,7 @@ def main() -> int:
             if not image_url:
                 print(f"ERROR: task {task_id} completed without detail.data[].download_url", file=sys.stderr)
                 return 1
-            result = {"task_id": task_id, "status": status, "image_url": image_url}
-            print(json.dumps(result, ensure_ascii=False))
-            print(f"IMAGE_URL={image_url}")
-            print(f"![Generated image]({image_url})")
-            return 0
+            return emit_result(task_id, status, image_url, args.output, args.url_only)
         if status in TERMINAL_FAILURE:
             error = payload.get("error")
             if isinstance(error, dict):

@@ -10,7 +10,7 @@
 - 图生图 / 改图：`POST /v1/image-tasks/edits`
 - 自动轮询：`GET /v1/image-tasks/{task_id}?detail=true`
 - 处理 `queued`、`in_progress`、`completed`、`failed`、`cancelled`
-- 完成后输出 `![Generated image](...)`，Codex 客户端会内嵌显示图片
+- 完成后把图片保存到本地并输出绝对路径 Markdown，避免第三方 CDN 域名被客户端拦截而显示失败
 - 支持自定义 API 域名、模型、尺寸、质量、超时时间
 
 ## 安装
@@ -60,6 +60,8 @@ export MODBAPI_API_KEY='你的 modbapi API Key'
 | `MODBAPI_API_KEY` | 是 | — | modbapi API Key |
 | `MODBAPI_BASE_URL` | 否 | `https://z.modbapi.com` | API 根地址，不要重复添加 `/v1` |
 
+图片默认保存到 `$CODEX_HOME/generated_images/modbapi/`（未设置 `CODEX_HOME` 时使用 `~/.codex/generated_images/modbapi/`）。可用 `--output` 指定项目内路径；只有明确需要旧的远程 URL 展示方式时才使用 `--url-only`。
+
 也可以在本地脚本调用时传入 `--base-url`。API Key 优先从 `MODBAPI_API_KEY` 读取。
 
 ## 使用示例
@@ -89,11 +91,13 @@ python3 scripts/modbapi_imagegen.py \
 
 ```text
 --prompt              必填，生图或编辑提示词
---model               模型，默认 gpt-image-2
+--model               模型，默认 gpt-image-2.5
 --base-url            API 根地址，默认 https://z.modbapi.com
 --size                默认 1024x1024
 --quality             可选，例如 high
 --response-format     url 或 b64_json，默认 url
+--output              本地图片文件路径；默认保存到 Codex generated_images 目录
+--url-only            不保存本地文件，使用远程 URL 展示（兼容旧行为）
 --edit                使用图片编辑任务
 --image-url           编辑输入图片 URL，可重复
 --interval            轮询间隔秒数，默认 3
@@ -121,6 +125,10 @@ python3 scripts/modbapi_imagegen.py \
 ### 任务 `completed` 但没有图片
 
 脚本要求详情接口返回 `detail.data[].download_url`。确认请求使用 `response_format=url`，并检查任务详情接口与渠道配置。
+
+### 任务成功但 Codex 中显示破图
+
+更新到最新版后重新运行。脚本默认把远程结果保存为本地文件，并输出 `IMAGE_PATH` 和可直接渲染的绝对路径 Markdown；不要把 `IMAGE_URL` 手动替换回 Markdown。
 
 ### `401` 或 `404`
 
