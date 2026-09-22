@@ -2,7 +2,7 @@
 
 Source: https://help.modbapi.com/#image-tasks (retrieved 2026-09-22).
 
-The default origin is `https://api.modbapi.com`. Authenticate with `Authorization: Bearer <API_KEY>`.
+The default origin is `https://z.modbapi.com`. Authenticate with `Authorization: Bearer <API_KEY>`.
 
 | Operation | Method | Path |
 |---|---|---|

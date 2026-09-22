@@ -12,7 +12,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlencode, urljoin
 from urllib.request import Request, urlopen
 
-DEFAULT_BASE_URL = "https://api.modbapi.com"
+DEFAULT_BASE_URL = "https://z.modbapi.com"
 DEFAULT_MODEL = "gpt-image-2"
 
 

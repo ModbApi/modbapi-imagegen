@@ -58,7 +58,7 @@ export MODBAPI_API_KEY='你的 modbapi API Key'
 | 环境变量 | 必填 | 默认值 | 说明 |
 |---|---:|---|---|
 | `MODBAPI_API_KEY` | 是 | — | modbapi API Key |
-| `MODBAPI_BASE_URL` | 否 | `https://api.modbapi.com` | API 根地址，不要重复添加 `/v1` |
+| `MODBAPI_BASE_URL` | 否 | `https://z.modbapi.com` | API 根地址，不要重复添加 `/v1` |
 
 也可以在本地脚本调用时传入 `--base-url`。API Key 优先从 `MODBAPI_API_KEY` 读取。
 
@@ -90,7 +90,7 @@ python3 scripts/modbapi_imagegen.py \
 ```text
 --prompt              必填，生图或编辑提示词
 --model               模型，默认 gpt-image-2
---base-url            API 根地址，默认 https://api.modbapi.com
+--base-url            API 根地址，默认 https://z.modbapi.com
 --size                默认 1024x1024
 --quality             可选，例如 high
 --response-format     url 或 b64_json，默认 url
@@ -124,7 +124,7 @@ python3 scripts/modbapi_imagegen.py \
 
 ### `401` 或 `404`
 
-检查 API Key、`MODBAPI_BASE_URL` 和 `/v1` 层级。默认值应为 `https://api.modbapi.com`，脚本会自动拼接 `/v1`。
+检查 API Key、`MODBAPI_BASE_URL` 和 `/v1` 层级。默认值应为 `https://z.modbapi.com`，脚本会自动拼接 `/v1`。
 
 ## 开发与验证
 
