@@ -1,0 +1,6 @@
+interface:
+  display_name: "modbapi Image Generation"
+  short_description: "Generate and display images through modbapi"
+  default_prompt: "Use $modbapi-imagegen to generate an image through modbapi and display the result here."
+policy:
+  allow_implicit_invocation: true
